@@ -129,6 +129,19 @@ export function specFor(path: string): CommandSpec | undefined {
   return COMMAND_SCHEMAS[path]
 }
 
+const WRITE_COMMANDS = [
+  'wrbl', 'csetuid', 'csetblk', 'cload', 'cwipe', 'restore', 'wipe', 'setmod',
+  'gen3uid', 'gen3blk', 'gen3freeze', 'gdmsetblk', 'gdmsetuid', 'gdmwipe',
+  'gdmsetcfg', 'gchpwd', 'ndefformat', 'ndefwrite', 'madwrite', 'encodehid',
+  'wrp', 'commitp', 'initp', 'chkey', 'chconf', 'eload', 'esetblk', 'ecfill'
+]
+
+/** Riesgo del comando seleccionado (para el chip SOLO LECTURA / ESCRITURA). */
+export function riskFor(path: string): 'read' | 'write' {
+  const last = path.trim().split(/\s+/).pop() ?? ''
+  return WRITE_COMMANDS.includes(last) ? 'write' : 'read'
+}
+
 // Arma la línea de comando a partir de los valores del formulario.
 export function buildCommand(path: string, spec: CommandSpec, values: Record<string, string | boolean>): string {
   const parts = [path]

@@ -125,6 +125,40 @@ ipcMain.handle('pm3:catalog-clear', () => {
 ipcMain.handle('pm3:busy', () => runner.isBusy)
 ipcMain.handle('pm3:bin', () => PM3_BIN)
 
+// Sonda silenciosa del dispositivo (sin ensuciar la terminal).
+ipcMain.handle('pm3:probe', async () => {
+  const lines: string[] = []
+  try {
+    await runner.run('hw version', (l) => lines.push(l))
+  } catch {
+    /* sin dispositivo */
+  }
+  let version = ''
+  const clean = lines.map((l) => l.replace(/\[[=+]\]\s*/, '').trim())
+  for (let i = 0; i < clean.length; i++) {
+    if (clean[i] === 'Client') {
+      for (let j = i + 1; j < Math.min(clean.length, i + 3); j++) {
+        const m = clean[j].match(/Iceman\/[^\s]+/)
+        if (m) {
+          version = m[0]
+          break
+        }
+      }
+    }
+  }
+  const pl: string[] = []
+  await runner.runBinary(PM3_BIN, ['--list'], (l) => pl.push(l))
+  let port = ''
+  for (const l of pl) {
+    const m = l.match(/\/dev\/(?:cu|tty)\.[A-Za-z0-9_-]+|\/dev\/ttyACM\d+/)
+    if (m) {
+      port = m[1]
+      break
+    }
+  }
+  return { connected: version !== '', version, port }
+})
+
 // ---------- Panel IA (DeepSeek) ----------
 
 const settingsPath = join(app.getPath('userData'), 'settings.json')

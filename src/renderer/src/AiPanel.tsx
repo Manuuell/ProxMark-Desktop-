@@ -60,8 +60,11 @@ export default function AiPanel() {
   return (
     <aside className="ai-panel">
       <div className="ai-head">
-        <span className="ai-title">Proxmark Assistant</span>
-        <div className="ai-head-btns">
+        <div className="glyph">✦</div>
+        <div className="att">
+          Proxmark Assistant<small>DeepSeek · {model}</small>
+        </div>
+        <div className="hbtn">
           <button title="Configuración" onClick={() => setShowSettings((s) => !s)}>
             ⚙
           </button>
@@ -111,23 +114,25 @@ export default function AiPanel() {
         )}
         {msgs.map((m, i) =>
           m.kind === 'user' ? (
-            <div key={i} className="ai-msg user">
+            <div key={i} className="bub user">
               {m.content}
             </div>
           ) : m.kind === 'assistant' ? (
-            <div key={i} className="ai-msg assistant">
+            <div key={i} className="bub bot">
               {m.content}
             </div>
           ) : (
-            <details key={i} className="ai-tool">
-              <summary>🔧 {m.tool}: {m.label}</summary>
+            <details key={i} className="toolcard">
+              <summary>
+                🔧 {m.tool} · {m.label} <span className="ran">✓ ejecutado</span>
+              </summary>
               <pre>
                 <ColoredLines text={m.output} />
               </pre>
             </details>
           )
         )}
-        {thinking && <div className="ai-msg assistant thinking">Pensando…</div>}
+        {thinking && <div className="bub bot thinking">Pensando…</div>}
       </div>
 
       <div className="ai-input">
@@ -139,7 +144,7 @@ export default function AiPanel() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && send()}
         />
-        <button className="primary" disabled={!hasKey || thinking || !input.trim()} onClick={send}>
+        <button className="send" disabled={!hasKey || thinking || !input.trim()} onClick={send}>
           Enviar
         </button>
       </div>

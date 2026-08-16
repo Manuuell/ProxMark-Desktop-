@@ -19,6 +19,7 @@ export interface Pm3Api {
   catalogClear(): Promise<boolean>
   busy(): Promise<boolean>
   bin(): Promise<string>
+  probe(): Promise<{ connected: boolean; version: string; port: string }>
   profiles: {
     get(): Promise<ProfilesResult>
     reload(): Promise<ProfilesResult>

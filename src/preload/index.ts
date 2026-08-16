@@ -12,6 +12,8 @@ const api = {
   catalogClear: (): Promise<boolean> => ipcRenderer.invoke('pm3:catalog-clear'),
   busy: (): Promise<boolean> => ipcRenderer.invoke('pm3:busy'),
   bin: (): Promise<string> => ipcRenderer.invoke('pm3:bin'),
+  probe: (): Promise<{ connected: boolean; version: string; port: string }> =>
+    ipcRenderer.invoke('pm3:probe'),
   profiles: {
     get: (): Promise<ProfilesResult> => ipcRenderer.invoke('profiles:get'),
     reload: (): Promise<ProfilesResult> => ipcRenderer.invoke('profiles:reload')

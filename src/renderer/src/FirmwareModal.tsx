@@ -5,10 +5,21 @@ interface Props {
   run: (cmd: string) => Promise<void>
 }
 
+interface StepDef {
+  key: string
+  title: string
+  done: boolean
+  active: boolean
+  desc?: React.ReactNode
+  act?: React.ReactNode
+}
+
 export default function FirmwareModal({ onClose, run }: Props) {
   const [busy, setBusy] = useState<string | null>(null)
   const [tooBig, setTooBig] = useState(false)
   const [flashed, setFlashed] = useState(false)
+  const [bootromFlashed, setBootromFlashed] = useState(false)
+  const [trimmedFlashed, setTrimmedFlashed] = useState(false)
   const [port, setPort] = useState('/dev/tty.usbmodemiceman1')
   const [built, setBuilt] = useState<{ bootrom: boolean; fullimage: boolean } | null>(null)
   const [status, setStatus] = useState<{
@@ -33,17 +44,18 @@ export default function FirmwareModal({ onClose, run }: Props) {
 
   async function detectPort() {
     const ports = await window.pm3.fw.listPorts()
-    if (ports.length === 1) setPort(ports[0])
-    else if (ports.length > 1) setPort(ports[0])
+    if (ports.length >= 1) setPort(ports[0])
   }
 
   async function checkState() {
     await guard('estado', async () => {
       setFlashed(false)
+      setTooBig(false)
+      setBootromFlashed(false)
+      setTrimmedFlashed(false)
       const st = await window.pm3.fw.checkStatus()
       setStatus(st)
-      const bins = await window.pm3.fw.checkBinaries()
-      setMissing(bins.missing)
+      setMissing((await window.pm3.fw.checkBinaries()).missing)
       await run('hw status')
       await detectPort()
       setBuilt(await window.pm3.fw.trimmedBuilt())
@@ -83,142 +95,197 @@ export default function FirmwareModal({ onClose, run }: Props) {
   async function flashBootrom() {
     await guard('flasheando bootrom', async () => {
       await window.pm3.fw.flashImage({ port, image: 'bootrom', unlock: true })
+      setBootromFlashed(true)
     })
   }
 
   async function flashTrimmed() {
     await guard('flasheando recortado', async () => {
       await window.pm3.fw.flashImage({ port, image: 'fullimage', unlock: false })
+      setTrimmedFlashed(true)
     })
   }
 
   async function verify() {
     await guard('verificando', async () => {
       await run('hw version')
+      const st = await window.pm3.fw.checkStatus()
+      setStatus(st)
     })
   }
+
+  const builtBoth = Boolean(built?.bootrom && built?.fullimage)
+
+  const steps: StepDef[] = [
+    {
+      key: 'estado',
+      title: 'Estado del dispositivo',
+      done: Boolean(status),
+      active: !status,
+      desc: 'Versión, flash y puertos detectados.',
+      act: (
+        <>
+          <button disabled={Boolean(busy)} onClick={checkState}>
+            🖥 Ver estado
+          </button>
+          {status?.detected && (
+            <div className="status-block">
+              <span className="hint">Client: {status.client}</span>
+              <span className="hint">Firmware: {status.os}</span>
+              <span className={status.upToDate ? 'ok' : 'warn'}>
+                {status.upToDate ? 'Firmware al día ✔' : 'El firmware difiere del client.'}
+              </span>
+            </div>
+          )}
+          {missing.length > 0 && (
+            <div className="status-block">
+              {missing.map((m) => (
+                <span key={m.name} className="warn">
+                  Falta <code>{m.name}</code>: {m.hint}
+                </span>
+              ))}
+            </div>
+          )}
+        </>
+      )
+    },
+    {
+      key: 'flash',
+      title: 'Flasheo completo (pm3-flash-all)',
+      done: flashed || tooBig,
+      active: Boolean(status) && !flashed && !tooBig,
+      desc: tooBig ? (
+        <span className="warn">Bootloader viejo (256 K) detectado → plan B.</span>
+      ) : flashed ? (
+        <span className="ok">Firmware flasheado ✔</span>
+      ) : undefined,
+      act: (
+        <>
+          <button disabled={Boolean(busy)} onClick={flashFull}>
+            ⚡ Flashear firmware completo
+          </button>
+          {status?.upToDate && (
+            <button className="ghost" disabled={Boolean(busy)} onClick={forceFlash}>
+              Forzar flasheo de todas formas
+            </button>
+          )}
+        </>
+      )
+    },
+    ...(tooBig
+      ? [
+          {
+            key: 'compile',
+            title: 'Compilar firmware recortado (HF-only)',
+            done: builtBoth,
+            active: !builtBoth,
+            desc: built
+              ? `bootrom ${built.bootrom ? '✓' : '✘'} · fullimage ${built.fullimage ? '✓' : '✘'}`
+              : 'Genera una imagen que cabe en el rango de 256 K.',
+            act: (
+              <button disabled={Boolean(busy)} onClick={compile}>
+                🔨 Compilar firmware recortado
+              </button>
+            )
+          } as StepDef,
+          {
+            key: 'bootrom',
+            title: 'Modo bootloader → flashear bootrom',
+            done: bootromFlashed,
+            active: builtBoth && !bootromFlashed,
+            desc: 'Mantén el botón pulsado al conectar el USB.',
+            act: (
+              <>
+                <div className="bootloader-instructions">
+                  <ol>
+                    <li>Desconecta el USB del Proxmark.</li>
+                    <li>Mantén pulsado el botón de la placa.</li>
+                    <li>Sin soltarlo, conecta el USB. Espera ~10 s y suelta.</li>
+                  </ol>
+                  <button className="ghost" disabled={Boolean(busy)} onClick={() => guard('puertos', detectPort)}>
+                    🔎 Detectar puerto (pm3 --list)
+                  </button>
+                  <label>
+                    Puerto:
+                    <input value={port} onChange={(e) => setPort(e.target.value)} />
+                  </label>
+                </div>
+                <button disabled={Boolean(busy)} onClick={flashBootrom}>
+                  🧱 Flashear bootrom (--unlock-bootloader)
+                </button>
+              </>
+            )
+          } as StepDef,
+          {
+            key: 'trimmed',
+            title: 'Flashear firmware recortado',
+            done: trimmedFlashed,
+            active: bootromFlashed && !trimmedFlashed,
+            desc: 'El equipo ya arranca Iceman; el puerto puede renumerarse.',
+            act: (
+              <button disabled={Boolean(busy)} onClick={flashTrimmed}>
+                📦 Flashear firmware recortado
+              </button>
+            )
+          } as StepDef
+        ]
+      : []),
+    {
+      key: 'verify',
+      title: 'Verificar (hw version)',
+      done: flashed,
+      active: !flashed && (tooBig ? trimmedFlashed : Boolean(status)),
+      desc: flashed ? <span className="ok">Confirma que arranca Iceman ✔</span> : 'Confirma que arranca Iceman.',
+      act: (
+        <button disabled={Boolean(busy)} onClick={verify}>
+          ✅ Verificar
+        </button>
+      )
+    }
+  ]
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <span>⚡ Actualización de firmware Iceman</span>
+          <div className="glyph">⚡</div>
+          <b>Actualizar firmware Iceman</b>
           <button onClick={onClose}>✕</button>
         </div>
 
         <div className="modal-body">
           <p className="modal-note">
-            Procedimiento (Proxmark3 Easy, macOS): flasheo completo; si el bootloader viejo
-            reporta 256K y rechaza la imagen, se compila un firmware recortado, se flashea el
-            bootrom en modo bootloader (botón) y se re-flashea el completo. Todo se ve en la
-            terminal central.
+            Proxmark3 Easy · macOS. Si el bootloader viejo reporta 256 K, el asistente activa el{' '}
+            <b>plan B</b> (firmware recortado) automáticamente. Todo se ve en la terminal central.
           </p>
 
-          <div className="step">
-            <button disabled={Boolean(busy)} onClick={checkState}>
-              🖥 Ver estado (versión, flash, puertos)
-            </button>
-            {status && status.detected && (
-              <div className="status-block">
-                <span className="hint">Client: {status.client}</span>
-                <span className="hint">Firmware: {status.os}</span>
-                <span className={status.upToDate ? 'ok' : 'warn'}>
-                  {status.upToDate
-                    ? 'Firmware al día ✔ — no hace falta flashear.'
-                    : 'El firmware difiere del client: se recomienda flashear.'}
-                </span>
+          <div className="steps">
+            {steps.map((s, i) => (
+              <div key={s.key} className={`fstep ${s.done ? 'done' : s.active ? 'active' : 'pending'}`}>
+                <div className="num">{s.done ? '✓' : i + 1}</div>
+                <div>
+                  <div className="stitle">{s.title}</div>
+                  {s.desc && <div className="sdesc">{s.desc}</div>}
+                  {s.act && <div className="sact">{s.act}</div>}
+                </div>
               </div>
-            )}
-            {missing.length > 0 && (
-              <div className="status-block">
-                {missing.map((m) => (
-                  <span key={m.name} className="warn">
-                    Falta <code>{m.name}</code>: {m.hint}
-                  </span>
-                ))}
-              </div>
-            )}
+            ))}
           </div>
 
-          <div className="step">
-            <button disabled={Boolean(busy)} onClick={flashFull}>
-              ⚡ Flashear firmware completo (pm3-flash-all)
-            </button>
-            {status?.upToDate && (
-              <button className="small" disabled={Boolean(busy)} onClick={forceFlash}>
-                Forzar flasheo de todas formas
-              </button>
-            )}
-            {tooBig && (
-              <span className="warn">
-                Bootloader viejo detectado ("firmware too big"): sigue con el plan B de abajo.
-              </span>
-            )}
-            {flashed && <span className="ok">Firmware al día ✔</span>}
-          </div>
-
-          <div className="step">
-            <button disabled={Boolean(busy)} onClick={() => guard('brew', () => window.pm3.fw.installClient().then(() => {}))}>
-              🍺 Instalar client Iceman (Homebrew, macOS)
-            </button>
-            <span className="hint">Solo si `pm3` no está instalado. Compila --HEAD: tarda bastante.</span>
-          </div>
-
-          {tooBig && (
-            <div className="planb">
-              <h4>Plan B — bootloader viejo (256K)</h4>
-              <div className="step">
-                <button disabled={Boolean(busy)} onClick={compile}>
-                  🔨 Compilar firmware recortado (HF-only)
-                </button>
-                {built && (
-                  <span className="hint">
-                    bootrom: {built.bootrom ? '✔' : '✘'} · fullimage: {built.fullimage ? '✔' : '✘'}
-                  </span>
-                )}
-              </div>
-
-              <div className="step bootloader-instructions">
-                <strong>Modo bootloader:</strong>
-                <ol>
-                  <li>Desconecta el USB del Proxmark.</li>
-                  <li>Mantén pulsado el botón de la placa.</li>
-                  <li>Sin soltarlo, conecta el USB. Espera ~10 s y suelta (LEDs fijos = bootloader).</li>
-                </ol>
-                <button className="small" disabled={Boolean(busy)} onClick={() => guard('puertos', detectPort)}>
-                  🔎 Detectar puerto (pm3 --list)
-                </button>
-                <label>
-                  Puerto:
-                  <input value={port} onChange={(e) => setPort(e.target.value)} />
-                </label>
-              </div>
-
-              <div className="step">
-                <button disabled={Boolean(busy)} onClick={flashBootrom}>
-                  🧱 Flashear bootrom (--unlock-bootloader)
-                </button>
-              </div>
-
-              <div className="step">
-                <button disabled={Boolean(busy)} onClick={flashTrimmed}>
-                  📦 Flashear firmware recortado
-                </button>
-                <span className="hint">Tras esto el equipo ya arranca Iceman; el puerto puede renumerarse.</span>
-              </div>
-
-              <div className="step">
-                <button disabled={Boolean(busy)} onClick={flashFull}>
-                  ⚡ Re-flashear firmware completo (512K)
+          <div className="fstep pending">
+            <div className="num">·</div>
+            <div>
+              <div className="stitle">Instalar client Iceman (Homebrew)</div>
+              <div className="sdesc">Solo si `pm3` no está instalado. Compila --HEAD: tarda bastante.</div>
+              <div className="sact">
+                <button
+                  disabled={Boolean(busy)}
+                  onClick={() => guard('brew', () => window.pm3.fw.installClient().then(() => {}))}
+                >
+                  🍺 Instalar client
                 </button>
               </div>
             </div>
-          )}
-
-          <div className="step">
-            <button disabled={Boolean(busy)} onClick={verify}>
-              ✅ Verificar (hw version)
-            </button>
           </div>
         </div>
 
