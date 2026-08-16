@@ -18,6 +18,7 @@ export default function FirmwareModal({ onClose, run }: Props) {
     upToDate: boolean
     detected: boolean
   } | null>(null)
+  const [missing, setMissing] = useState<{ name: string; hint: string }[]>([])
 
   async function guard(label: string, fn: () => Promise<void>) {
     setBusy(label)
@@ -30,13 +31,21 @@ export default function FirmwareModal({ onClose, run }: Props) {
     setBusy(null)
   }
 
+  async function detectPort() {
+    const ports = await window.pm3.fw.listPorts()
+    if (ports.length === 1) setPort(ports[0])
+    else if (ports.length > 1) setPort(ports[0])
+  }
+
   async function checkState() {
     await guard('estado', async () => {
       setFlashed(false)
       const st = await window.pm3.fw.checkStatus()
       setStatus(st)
+      const bins = await window.pm3.fw.checkBinaries()
+      setMissing(bins.missing)
       await run('hw status')
-      await window.pm3.fw.listPorts()
+      await detectPort()
       setBuilt(await window.pm3.fw.trimmedBuilt())
     })
   }
@@ -120,6 +129,15 @@ export default function FirmwareModal({ onClose, run }: Props) {
                 </span>
               </div>
             )}
+            {missing.length > 0 && (
+              <div className="status-block">
+                {missing.map((m) => (
+                  <span key={m.name} className="warn">
+                    Falta <code>{m.name}</code>: {m.hint}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="step">
@@ -167,6 +185,9 @@ export default function FirmwareModal({ onClose, run }: Props) {
                   <li>Mantén pulsado el botón de la placa.</li>
                   <li>Sin soltarlo, conecta el USB. Espera ~10 s y suelta (LEDs fijos = bootloader).</li>
                 </ol>
+                <button className="small" disabled={Boolean(busy)} onClick={() => guard('puertos', detectPort)}>
+                  🔎 Detectar puerto (pm3 --list)
+                </button>
                 <label>
                   Puerto:
                   <input value={port} onChange={(e) => setPort(e.target.value)} />

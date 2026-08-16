@@ -93,9 +93,41 @@ export function bin(name: string): string {
   return join(BIN_DIR, name)
 }
 
-/** Lista los puertos del Proxmark (pm3 --list). */
-export async function listPorts(runner: Pm3Runner, onLine: (l: string) => void): Promise<number | null> {
-  return runner.runBinary(PM3_BIN, ['--list'], onLine)
+/** Lista los puertos del Proxmark (pm3 --list). Devuelve los puertos detectados. */
+export async function listPorts(
+  runner: Pm3Runner,
+  onLine: (l: string) => void
+): Promise<string[]> {
+  const lines: string[] = []
+  await runner.runBinary(PM3_BIN, ['--list'], (l) => {
+    lines.push(l)
+    onLine(l)
+  })
+  const ports = new Set<string>()
+  for (const l of lines) {
+    const m = l.match(/(\/dev\/(?:cu|tty)\.[A-Za-z0-9_-]+|\/dev\/ttyACM\d+)/)
+    if (m) ports.add(m[1])
+  }
+  return [...ports]
+}
+
+/** Comprueba que los binarios/toolchain necesarios existen. */
+export interface MissingBin {
+  name: string
+  hint: string
+}
+
+export function checkBinaries(): { ok: boolean; missing: MissingBin[] } {
+  const missing: MissingBin[] = []
+  const need = (name: string, path: string, hint: string): void => {
+    if (!existsSync(path)) missing.push({ name, hint })
+  }
+  need('pm3', PM3_BIN, 'brew install proxmark3')
+  need('pm3-flash-all', bin('pm3-flash-all'), 'brew install proxmark3')
+  need('proxmark3', bin('proxmark3'), 'brew install proxmark3')
+  need('make', '/usr/bin/make', 'xcode-select --install')
+  need('arm-none-eabi-gcc', bin('arm-none-eabi-gcc'), 'brew install armmbed/formulae/arm-none-eabi-gcc')
+  return { ok: missing.length === 0, missing }
 }
 
 /** Flashea bootrom + firmware completo con pm3-flash-all. */
@@ -106,7 +138,7 @@ export async function flashAll(runner: Pm3Runner, onLine: (l: string) => void): 
     onLine(l)
   })
   const output = lines.join('\n')
-  const tooBig = /too big|256K of flash|256k of flash/i.test(output)
+  const tooBig = /too big|256k of flash/i.test(output)
   const ok = code === 0 && /all done|success/i.test(output)
   return { ok, tooBig, output }
 }
@@ -116,13 +148,23 @@ export async function installClient(runner: Pm3Runner, onLine: (l: string) => vo
   const brew = bin('brew')
   const steps: string[][] = [
     [brew, 'tap', 'RfidResearchGroup/proxmark3'],
-    [brew, 'trust', 'rfidresearchgroup/proxmark3'],
-    [brew, 'install', '--HEAD', '--with-generic', 'proxmark3']
+    [brew, 'trust', 'rfidresearchgroup/proxmark3']
   ]
   let code: number | null = 0
   for (const s of steps) {
     onLine(`\n── [Firmware] $ ${s.join(' ')} ──`)
     code = await runner.runBinary(s[0], s.slice(1), onLine)
+  }
+  // --with-generic puede no existir en la fórmula actual: si falla, reintentar sin él.
+  const lines: string[] = []
+  onLine(`\n── [Firmware] $ brew install --HEAD --with-generic proxmark3 ──`)
+  code = await runner.runBinary(brew, ['install', '--HEAD', '--with-generic', 'proxmark3'], (l) => {
+    lines.push(l)
+    onLine(l)
+  })
+  if (code !== 0 && /invalid option|unknown option/i.test(lines.join('\n'))) {
+    onLine(`\n── [Firmware] opción no soportada; reintentando sin --with-generic ──`)
+    code = await runner.runBinary(brew, ['install', '--HEAD', 'proxmark3'], onLine)
   }
   return code
 }

@@ -89,7 +89,11 @@ export default function App() {
       })
       .catch(() => {})
     const off = window.pm3.onOutput((line) => setOut((p) => [...p, line]))
-    return off
+    const offBusy = window.pm3.onBusy(setBusy)
+    return () => {
+      off()
+      offBusy()
+    }
   }, [])
 
   async function reloadProfiles() {
@@ -143,13 +147,8 @@ export default function App() {
   }
 
   async function execute(cmd: string, cwd?: string, clear = true) {
-    setBusy(true)
     if (clear) setOut([])
-    try {
-      await window.pm3.run(cmd, cwd)
-    } finally {
-      setBusy(false)
-    }
+    await window.pm3.run(cmd, cwd)
   }
 
   async function runSelected() {
@@ -317,7 +316,9 @@ export default function App() {
       </main>
 
       <AiPanel />
-      {showFw && <FirmwareModal onClose={() => setShowFw(false)} run={(cmd) => execute(cmd)} />}
+      {showFw && (
+        <FirmwareModal onClose={() => setShowFw(false)} run={(cmd) => execute(cmd, undefined, false)} />
+      )}
     </div>
   )
 

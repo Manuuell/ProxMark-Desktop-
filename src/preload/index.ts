@@ -17,7 +17,9 @@ const api = {
     reload: (): Promise<ProfilesResult> => ipcRenderer.invoke('profiles:reload')
   },
   fw: {
-    listPorts: (): Promise<number | null> => ipcRenderer.invoke('fw:list-ports'),
+    listPorts: (): Promise<string[]> => ipcRenderer.invoke('fw:list-ports'),
+    checkBinaries: (): Promise<{ ok: boolean; missing: { name: string; hint: string }[] }> =>
+      ipcRenderer.invoke('fw:check-binaries'),
     checkStatus: (): Promise<{
       client: string
       bootrom: string
@@ -42,6 +44,13 @@ const api = {
     ipcRenderer.on('pm3:output', handler)
     return () => {
       ipcRenderer.removeListener('pm3:output', handler)
+    }
+  },
+  onBusy: (cb: (busy: boolean) => void): (() => void) => {
+    const handler = (_e: unknown, busy: boolean): void => cb(busy)
+    ipcRenderer.on('pm3:busy-changed', handler)
+    return () => {
+      ipcRenderer.removeListener('pm3:busy-changed', handler)
     }
   },
   ai: {

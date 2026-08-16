@@ -24,7 +24,8 @@ export interface Pm3Api {
     reload(): Promise<ProfilesResult>
   }
   fw: {
-    listPorts(): Promise<number | null>
+    listPorts(): Promise<string[]>
+    checkBinaries(): Promise<{ ok: boolean; missing: { name: string; hint: string }[] }>
     checkStatus(): Promise<{
       client: string
       bootrom: string
@@ -43,6 +44,7 @@ export interface Pm3Api {
     }): Promise<number | null>
   }
   onOutput(cb: (line: string) => void): () => void
+  onBusy(cb: (busy: boolean) => void): () => void
   ai: AiApi
 }
 

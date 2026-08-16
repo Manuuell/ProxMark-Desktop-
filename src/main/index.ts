@@ -11,6 +11,14 @@ import * as fw from './firmware'
 const runner = new Pm3Runner()
 const catalogCache = new Map<string, CatalogEntry[]>()
 
+// El estado busy del runner se transmite a TODAS las ventanas para que la UI
+// principal se bloquee también durante operaciones de firmware/IA.
+runner.on('busy', (b: boolean) => {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('pm3:busy-changed', b)
+  }
+})
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1320,
@@ -214,6 +222,7 @@ function senderFor(event: Electron.IpcMainInvokeEvent): (line: string) => void {
 }
 
 ipcMain.handle('fw:list-ports', (event) => fw.listPorts(runner, senderFor(event)))
+ipcMain.handle('fw:check-binaries', () => fw.checkBinaries())
 ipcMain.handle('fw:check-status', (event) => fw.checkStatus(runner, senderFor(event)))
 ipcMain.handle('fw:flash-all', (event) => fw.flashAll(runner, senderFor(event)))
 ipcMain.handle('fw:install-client', (event) => fw.installClient(runner, senderFor(event)))
