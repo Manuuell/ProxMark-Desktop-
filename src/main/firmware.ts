@@ -7,6 +7,7 @@ import { join, dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { Pm3Runner, PM3_BIN } from './pm3'
+import { stripAnsi } from '../shared/catalog'
 
 export const BIN_DIR = dirname(PM3_BIN)
 export const SRC_DIR = join(homedir(), 'proxmark3-src')
@@ -65,14 +66,14 @@ export async function checkStatus(
     lines.push(l)
     onLine(l)
   })
-  const clean = lines.map((l) => l.replace(/\[[=+]\]\s*/, '').trim())
+  const clean = lines.map((l) => stripAnsi(l).replace(/\[[=+!?]\]\s*/, '').trim())
   let client = ''
   let bootrom = ''
   let os = ''
   for (let i = 0; i < clean.length; i++) {
     const l = clean[i]
-    if (l === 'Client' || l === 'Client:') {
-      for (let j = i + 1; j < Math.min(clean.length, i + 3); j++) {
+    if (l.toLowerCase().includes('client')) {
+      for (let j = i + 1; j < Math.min(clean.length, i + 4); j++) {
         if (clean[j].includes('Iceman/')) {
           client = extractVer(clean[j])
           break

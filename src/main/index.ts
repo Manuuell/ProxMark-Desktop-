@@ -134,10 +134,10 @@ ipcMain.handle('pm3:probe', async () => {
     /* sin dispositivo */
   }
   let version = ''
-  const clean = lines.map((l) => l.replace(/\[[=+]\]\s*/, '').trim())
+  const clean = lines.map((l) => stripAnsi(l).replace(/\[[=+!?]\]\s*/, '').trim())
   for (let i = 0; i < clean.length; i++) {
-    if (clean[i] === 'Client') {
-      for (let j = i + 1; j < Math.min(clean.length, i + 3); j++) {
+    if (clean[i].toLowerCase().includes('client')) {
+      for (let j = i + 1; j < Math.min(clean.length, i + 4); j++) {
         const m = clean[j].match(/Iceman\/[^\s]+/)
         if (m) {
           version = m[0]
@@ -150,7 +150,7 @@ ipcMain.handle('pm3:probe', async () => {
   await runner.runBinary(PM3_BIN, ['--list'], (l) => pl.push(l))
   let port = ''
   for (const l of pl) {
-    const m = l.match(/\/dev\/(?:cu|tty)\.[A-Za-z0-9_-]+|\/dev\/ttyACM\d+/)
+    const m = stripAnsi(l).match(/\/dev\/(?:cu|tty)\.[A-Za-z0-9_-]+|\/dev\/ttyACM\d+/)
     if (m) {
       port = m[1]
       break
