@@ -116,30 +116,6 @@ button.small {
   flex: none;
 }
 
-.lights {
-  display: flex;
-  gap: 8px;
-}
-
-.lights i {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: block;
-}
-
-.lights i:nth-child(1) {
-  background: #ff5f57;
-}
-
-.lights i:nth-child(2) {
-  background: #febc2e;
-}
-
-.lights i:nth-child(3) {
-  background: #28c840;
-}
-
 .wtitle {
   font-size: 13px;
   color: var(--tx-2);

@@ -214,11 +214,6 @@ export default function App() {
   return (
     <div className="appwin">
       <div className="titlebar">
-        <div className="lights">
-          <i />
-          <i />
-          <i />
-        </div>
         <span className="wtitle">Proxmark Desktop</span>
         <span className="grow" />
         <span className={`devpill ${dev.connected === false ? 'off' : ''}`}>
