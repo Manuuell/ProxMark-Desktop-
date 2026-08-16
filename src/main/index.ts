@@ -1,7 +1,14 @@
 import { app, BrowserWindow, ipcMain, safeStorage } from 'electron'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'node:fs'
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  statSync,
+  readdirSync
+} from 'node:fs'
 import { Pm3Runner, PM3_BIN } from './pm3'
 import { parseHelp, stripAnsi, type CatalogEntry } from '../shared/catalog'
 import { chat, type AiSettings } from './ai'
@@ -126,7 +133,13 @@ ipcMain.handle('pm3:busy', () => runner.isBusy)
 ipcMain.handle('pm3:bin', () => PM3_BIN)
 
 // Sonda silenciosa del dispositivo (sin ensuciar la terminal).
-ipcMain.handle('pm3:probe', async () => {
+interface DeviceState {
+  connected: boolean
+  version: string
+  port: string
+}
+
+async function doProbe(): Promise<DeviceState> {
   const lines: string[] = []
   try {
     await runner.run('hw version', (l) => lines.push(l))
@@ -157,6 +170,54 @@ ipcMain.handle('pm3:probe', async () => {
     }
   }
   return { connected: version !== '', version, port }
+}
+
+let currentPort: string | null = null
+let lastAutoProbe = 0
+
+function broadcastDevice(state: DeviceState): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) w.webContents.send('pm3:device-changed', state)
+  }
+}
+
+function findUsbmodem(): string | null {
+  try {
+    const names = readdirSync('/dev')
+    return (
+      names.find((n) => n.startsWith('tty.usbmodem')) ??
+      names.find((n) => n.startsWith('cu.usbmodem')) ??
+      names.find((n) => n.startsWith('ttyACM')) ??
+      null
+    )
+  } catch {
+    return null
+  }
+}
+
+// Vigila conecta/desconecta del puerto USB (sin consumir el runner).
+setInterval(() => {
+  if (currentPort && !existsSync(currentPort)) {
+    currentPort = null
+    broadcastDevice({ connected: false, version: '', port: '' })
+    return
+  }
+  if (!currentPort && Date.now() - lastAutoProbe > 8000) {
+    if (findUsbmodem()) {
+      lastAutoProbe = Date.now()
+      doProbe().then((state) => {
+        currentPort = state.connected ? state.port : null
+        broadcastDevice(state)
+      })
+    }
+  }
+}, 2000)
+
+ipcMain.handle('pm3:probe', async () => {
+  const state = await doProbe()
+  currentPort = state.connected ? state.port : null
+  lastAutoProbe = Date.now()
+  return state
 })
 
 // ---------- Panel IA (DeepSeek) ----------

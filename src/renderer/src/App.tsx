@@ -98,9 +98,11 @@ export default function App() {
     probe()
     const off = window.pm3.onOutput((line) => setOut((p) => [...p, line]))
     const offBusy = window.pm3.onBusy(setBusy)
+    const offDevice = window.pm3.onDevice(setDev)
     return () => {
       off()
       offBusy()
+      offDevice()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

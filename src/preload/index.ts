@@ -55,6 +55,14 @@ const api = {
       ipcRenderer.removeListener('pm3:busy-changed', handler)
     }
   },
+  onDevice: (cb: (state: { connected: boolean; version: string; port: string }) => void): (() => void) => {
+    const handler = (_e: unknown, state: { connected: boolean; version: string; port: string }): void =>
+      cb(state)
+    ipcRenderer.on('pm3:device-changed', handler)
+    return () => {
+      ipcRenderer.removeListener('pm3:device-changed', handler)
+    }
+  },
   ai: {
     getSettings: (): Promise<AiSettings> => ipcRenderer.invoke('ai:getSettings'),
     setSettings: (s: AiSettings): Promise<boolean> => ipcRenderer.invoke('ai:setSettings', s),

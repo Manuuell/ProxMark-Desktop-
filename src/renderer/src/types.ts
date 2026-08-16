@@ -46,6 +46,7 @@ export interface Pm3Api {
   }
   onOutput(cb: (line: string) => void): () => void
   onBusy(cb: (busy: boolean) => void): () => void
+  onDevice(cb: (state: { connected: boolean; version: string; port: string }) => void): () => void
   ai: AiApi
 }
 
