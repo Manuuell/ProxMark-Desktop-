@@ -98,7 +98,13 @@ export default function App() {
     probe()
     const off = window.pm3.onOutput((line) => setOut((p) => [...p, line]))
     const offBusy = window.pm3.onBusy(setBusy)
-    const offDevice = window.pm3.onDevice(setDev)
+    const offDevice = window.pm3.onDevice((state) => {
+      setDev(state)
+      if (state.connected) {
+        // al reconectar, limpia los avisos de espera del pm3
+        setOut((p) => p.filter((l) => !/waiting for proxmark3 to appear/i.test(l.trim())))
+      }
+    })
     return () => {
       off()
       offBusy()
