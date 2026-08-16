@@ -454,3 +454,142 @@ button:disabled {
 .ai-input input:focus {
   border-color: #7d5cf0;
 }
+
+/* ---------- Firmware modal ---------- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  width: 620px;
+  max-width: 92vw;
+  max-height: 86vh;
+  background: #161b21;
+  border: 1px solid #2b3642;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid #232b33;
+  font-weight: 700;
+  color: #4fa3ff;
+}
+
+.modal-head button {
+  padding: 4px 9px;
+}
+
+.modal-body {
+  padding: 12px 14px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.modal-note {
+  margin: 0;
+  font-size: 12px;
+  color: #8b99a6;
+  line-height: 1.5;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #12171d;
+  border: 1px solid #232b33;
+  border-radius: 8px;
+}
+
+.step button {
+  align-self: flex-start;
+}
+
+.step .hint {
+  font-size: 11px;
+  color: #55636f;
+}
+
+.step .warn {
+  font-size: 12px;
+  color: #e8a13a;
+}
+
+.step .ok {
+  font-size: 12px;
+  color: #4cd08a;
+}
+
+.status-block {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.planb {
+  border: 1px solid #3a3219;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #1a1710;
+}
+
+.planb h4 {
+  margin: 0;
+  color: #e8a13a;
+  font-size: 13px;
+}
+
+.bootloader-instructions {
+  font-size: 12px;
+  color: #c4cfd8;
+}
+
+.bootloader-instructions ol {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+}
+
+.bootloader-instructions label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #8b99a6;
+}
+
+.bootloader-instructions input {
+  background: #0d1116;
+  border: 1px solid #2b3642;
+  border-radius: 6px;
+  color: #d6dde4;
+  padding: 6px 8px;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.modal-foot {
+  padding: 8px 14px;
+  border-top: 1px solid #232b33;
+  font-size: 11px;
+  color: #7d8b98;
+}

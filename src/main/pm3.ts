@@ -5,14 +5,16 @@ import { EventEmitter } from 'node:events'
 export const PM3_BIN = process.env.PM3_BIN || '/opt/homebrew/bin/pm3'
 
 interface Job {
-  cmd: string
+  bin: string
+  args: string[]
   cwd: string
+  env?: NodeJS.ProcessEnv
   onLine: (line: string) => void
   resolve: (code: number | null) => void
 }
 
 /**
- * Ejecuta comandos pm3 de a uno (el dispositivo es un solo hilo de hardware)
+ * Ejecuta comandos de a uno (el dispositivo es un solo hilo de hardware)
  * y emite las líneas de salida en vivo.
  */
 export class Pm3Runner extends EventEmitter {
@@ -24,11 +26,20 @@ export class Pm3Runner extends EventEmitter {
     return this.busy
   }
 
+  /** Ejecuta un comando del client pm3: `pm3 -c "<cmd>"`. */
   run(cmd: string, onLine: (line: string) => void, cwd?: string): Promise<number | null> {
-    return new Promise((resolve) => {
-      this.queue.push({ cmd, cwd: cwd ?? process.cwd(), onLine, resolve })
-      this.pump()
-    })
+    return this.enqueue(PM3_BIN, ['-c', cmd], cwd, undefined, onLine)
+  }
+
+  /** Ejecuta un binario arbitrario con argumentos (pm3-flash-all, proxmark3, brew...). */
+  runBinary(
+    bin: string,
+    args: string[],
+    onLine: (line: string) => void,
+    cwd?: string,
+    env?: NodeJS.ProcessEnv
+  ): Promise<number | null> {
+    return this.enqueue(bin, args, cwd, env, onLine)
   }
 
   /** Mata el comando en curso (útil para sniff interactivo). */
@@ -36,12 +47,25 @@ export class Pm3Runner extends EventEmitter {
     if (this.child) this.child.kill('SIGTERM')
   }
 
+  private enqueue(
+    bin: string,
+    args: string[],
+    cwd: string | undefined,
+    env: NodeJS.ProcessEnv | undefined,
+    onLine: (line: string) => void
+  ): Promise<number | null> {
+    return new Promise((resolve) => {
+      this.queue.push({ bin, args, cwd: cwd ?? process.cwd(), env, onLine, resolve })
+      this.pump()
+    })
+  }
+
   private pump(): void {
     if (this.busy || this.queue.length === 0) return
     this.busy = true
     this.emit('busy', true)
     const job = this.queue.shift() as Job
-    const child = spawn(PM3_BIN, ['-c', job.cmd], { cwd: job.cwd })
+    const child = spawn(job.bin, job.args, { cwd: job.cwd, env: job.env })
     this.child = child
 
     let buf = ''

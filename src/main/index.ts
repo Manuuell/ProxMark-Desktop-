@@ -6,6 +6,7 @@ import { Pm3Runner, PM3_BIN } from './pm3'
 import { parseHelp, stripAnsi, type CatalogEntry } from '../shared/catalog'
 import { chat, type AiSettings } from './ai'
 import type { CommandProfile, ProfilesResult } from '../shared/profiles'
+import * as fw from './firmware'
 
 const runner = new Pm3Runner()
 const catalogCache = new Map<string, CatalogEntry[]>()
@@ -200,3 +201,26 @@ function loadProfiles(): ProfilesResult {
 
 ipcMain.handle('profiles:get', () => loadProfiles())
 ipcMain.handle('profiles:reload', () => loadProfiles())
+
+// ---------- Actualización de firmware Iceman ----------
+
+function senderFor(event: Electron.IpcMainInvokeEvent): (line: string) => void {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  return (line: string): void => {
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('pm3:output', stripAnsi(line))
+    }
+  }
+}
+
+ipcMain.handle('fw:list-ports', (event) => fw.listPorts(runner, senderFor(event)))
+ipcMain.handle('fw:check-status', (event) => fw.checkStatus(runner, senderFor(event)))
+ipcMain.handle('fw:flash-all', (event) => fw.flashAll(runner, senderFor(event)))
+ipcMain.handle('fw:install-client', (event) => fw.installClient(runner, senderFor(event)))
+ipcMain.handle('fw:compile-trimmed', (event) => fw.compileTrimmed(runner, senderFor(event)))
+ipcMain.handle('fw:trimmed-built', () => fw.trimmedBuilt())
+ipcMain.handle(
+  'fw:flash-image',
+  (event, opts: { port: string; image: 'bootrom' | 'fullimage'; unlock: boolean }) =>
+    fw.flashImage(runner, opts.port, opts.image, opts.unlock, senderFor(event))
+)

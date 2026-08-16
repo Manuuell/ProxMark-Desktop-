@@ -16,6 +16,27 @@ const api = {
     get: (): Promise<ProfilesResult> => ipcRenderer.invoke('profiles:get'),
     reload: (): Promise<ProfilesResult> => ipcRenderer.invoke('profiles:reload')
   },
+  fw: {
+    listPorts: (): Promise<number | null> => ipcRenderer.invoke('fw:list-ports'),
+    checkStatus: (): Promise<{
+      client: string
+      bootrom: string
+      os: string
+      upToDate: boolean
+      detected: boolean
+    }> => ipcRenderer.invoke('fw:check-status'),
+    flashAll: (): Promise<{ ok: boolean; tooBig: boolean; output: string }> =>
+      ipcRenderer.invoke('fw:flash-all'),
+    installClient: (): Promise<number | null> => ipcRenderer.invoke('fw:install-client'),
+    compileTrimmed: (): Promise<number | null> => ipcRenderer.invoke('fw:compile-trimmed'),
+    trimmedBuilt: (): Promise<{ bootrom: boolean; fullimage: boolean }> =>
+      ipcRenderer.invoke('fw:trimmed-built'),
+    flashImage: (opts: {
+      port: string
+      image: 'bootrom' | 'fullimage'
+      unlock: boolean
+    }): Promise<number | null> => ipcRenderer.invoke('fw:flash-image', opts)
+  },
   onOutput: (cb: (line: string) => void): (() => void) => {
     const handler = (_e: unknown, line: string): void => cb(line)
     ipcRenderer.on('pm3:output', handler)

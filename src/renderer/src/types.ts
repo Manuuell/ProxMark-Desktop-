@@ -23,6 +23,25 @@ export interface Pm3Api {
     get(): Promise<ProfilesResult>
     reload(): Promise<ProfilesResult>
   }
+  fw: {
+    listPorts(): Promise<number | null>
+    checkStatus(): Promise<{
+      client: string
+      bootrom: string
+      os: string
+      upToDate: boolean
+      detected: boolean
+    }>
+    flashAll(): Promise<{ ok: boolean; tooBig: boolean; output: string }>
+    installClient(): Promise<number | null>
+    compileTrimmed(): Promise<number | null>
+    trimmedBuilt(): Promise<{ bootrom: boolean; fullimage: boolean }>
+    flashImage(opts: {
+      port: string
+      image: 'bootrom' | 'fullimage'
+      unlock: boolean
+    }): Promise<number | null>
+  }
   onOutput(cb: (line: string) => void): () => void
   ai: AiApi
 }

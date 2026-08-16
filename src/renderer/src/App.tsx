@@ -3,6 +3,7 @@ import { specFor, buildCommand, type CommandSpec } from '../../shared/commands'
 import type { CatalogEntry } from '../../shared/catalog'
 import type { CommandProfile } from '../../shared/profiles'
 import AiPanel from './AiPanel'
+import FirmwareModal from './FirmwareModal'
 import './types'
 
 interface Entry extends CatalogEntry {}
@@ -74,6 +75,7 @@ export default function App() {
   const [bin, setBin] = useState('')
   const [profiles, setProfiles] = useState<CommandProfile[]>([])
   const [profilesPath, setProfilesPath] = useState('')
+  const [showFw, setShowFw] = useState(false)
   const outRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -182,6 +184,9 @@ export default function App() {
           />
           <button className="small" title="Recargar catálogo de comandos" onClick={refreshCatalog}>
             ⟳ Recargar catálogo
+          </button>
+          <button className="small" title="Actualizar firmware Iceman" onClick={() => setShowFw(true)}>
+            ⚡ Firmware
           </button>
         </div>
         <div className="tree">
@@ -312,6 +317,7 @@ export default function App() {
       </main>
 
       <AiPanel />
+      {showFw && <FirmwareModal onClose={() => setShowFw(false)} run={(cmd) => execute(cmd)} />}
     </div>
   )
 
