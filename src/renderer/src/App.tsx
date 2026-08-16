@@ -4,6 +4,7 @@ import type { CatalogEntry } from '../../shared/catalog'
 import type { CommandProfile } from '../../shared/profiles'
 import AiPanel from './AiPanel'
 import FirmwareModal from './FirmwareModal'
+import { lineClass } from './highlight'
 import './types'
 
 interface Entry extends CatalogEntry {}
@@ -303,7 +304,7 @@ export default function App() {
         <div className="output" ref={outRef}>
           {out.length === 0 && <span className="placeholder">La salida del pm3 aparecerá aquí</span>}
           {out.map((l, i) => (
-            <div key={i} className="line">
+            <div key={i} className={`line ${lineClass(l)}`}>
               {l || '\u00A0'}
             </div>
           ))}

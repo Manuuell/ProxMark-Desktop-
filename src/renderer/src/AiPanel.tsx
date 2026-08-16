@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UiMsg } from './types'
+import ColoredLines from './ColoredLines'
 import './types'
 
 const MODELS = ['deepseek-chat', 'deepseek-reasoner']
@@ -120,7 +121,9 @@ export default function AiPanel() {
           ) : (
             <details key={i} className="ai-tool">
               <summary>🔧 {m.tool}: {m.label}</summary>
-              <pre>{m.output}</pre>
+              <pre>
+                <ColoredLines text={m.output} />
+              </pre>
             </details>
           )
         )}
