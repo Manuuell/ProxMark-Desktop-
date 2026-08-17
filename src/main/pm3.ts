@@ -9,6 +9,7 @@ interface Job {
   args: string[]
   cwd: string
   env?: NodeJS.ProcessEnv
+  silent: boolean
   onLine: (line: string) => void
   resolve: (code: number | null) => void
 }
@@ -27,8 +28,8 @@ export class Pm3Runner extends EventEmitter {
   }
 
   /** Ejecuta un comando del client pm3: `pm3 -c "<cmd>"`. */
-  run(cmd: string, onLine: (line: string) => void, cwd?: string): Promise<number | null> {
-    return this.enqueue(PM3_BIN, ['-c', cmd], cwd, undefined, onLine)
+  run(cmd: string, onLine: (line: string) => void, cwd?: string, silent = false): Promise<number | null> {
+    return this.enqueue(PM3_BIN, ['-c', cmd], cwd, undefined, silent, onLine)
   }
 
   /** Ejecuta un binario arbitrario con argumentos (pm3-flash-all, proxmark3, brew...). */
@@ -37,9 +38,10 @@ export class Pm3Runner extends EventEmitter {
     args: string[],
     onLine: (line: string) => void,
     cwd?: string,
-    env?: NodeJS.ProcessEnv
+    env?: NodeJS.ProcessEnv,
+    silent = false
   ): Promise<number | null> {
-    return this.enqueue(bin, args, cwd, env, onLine)
+    return this.enqueue(bin, args, cwd, env, silent, onLine)
   }
 
   /** Mata el comando en curso (útil para sniff interactivo). */
@@ -52,10 +54,11 @@ export class Pm3Runner extends EventEmitter {
     args: string[],
     cwd: string | undefined,
     env: NodeJS.ProcessEnv | undefined,
+    silent: boolean,
     onLine: (line: string) => void
   ): Promise<number | null> {
     return new Promise((resolve) => {
-      this.queue.push({ bin, args, cwd: cwd ?? process.cwd(), env, onLine, resolve })
+      this.queue.push({ bin, args, cwd: cwd ?? process.cwd(), env, silent, onLine, resolve })
       this.pump()
     })
   }
@@ -63,8 +66,8 @@ export class Pm3Runner extends EventEmitter {
   private pump(): void {
     if (this.busy || this.queue.length === 0) return
     this.busy = true
-    this.emit('busy', true)
     const job = this.queue.shift() as Job
+    if (!job.silent) this.emit('busy', true)
     const child = spawn(job.bin, job.args, { cwd: job.cwd, env: job.env })
     this.child = child
 
@@ -81,7 +84,7 @@ export class Pm3Runner extends EventEmitter {
       if (buf) job.onLine(buf)
       this.child = null
       this.busy = false
-      this.emit('busy', false)
+      if (!job.silent) this.emit('busy', false)
       job.resolve(code)
       this.pump()
     })
@@ -89,7 +92,7 @@ export class Pm3Runner extends EventEmitter {
       job.onLine(`ERROR: ${err.message}`)
       this.child = null
       this.busy = false
-      this.emit('busy', false)
+      if (!job.silent) this.emit('busy', false)
       job.resolve(null)
       this.pump()
     })

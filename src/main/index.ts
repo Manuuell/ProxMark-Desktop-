@@ -142,7 +142,7 @@ interface DeviceState {
 async function doProbe(): Promise<DeviceState> {
   const lines: string[] = []
   try {
-    await runner.run('hw version', (l) => lines.push(l))
+    await runner.run('hw version', (l) => lines.push(l), undefined, true)
   } catch {
     /* sin dispositivo */
   }
@@ -160,7 +160,7 @@ async function doProbe(): Promise<DeviceState> {
     }
   }
   const pl: string[] = []
-  await runner.runBinary(PM3_BIN, ['--list'], (l) => pl.push(l))
+  await runner.runBinary(PM3_BIN, ['--list'], (l) => pl.push(l), undefined, undefined, true)
   let port = ''
   for (const l of pl) {
     const m = stripAnsi(l).match(/\/dev\/(?:cu|tty)\.[A-Za-z0-9_-]+|\/dev\/ttyACM\d+/)
@@ -169,11 +169,14 @@ async function doProbe(): Promise<DeviceState> {
       break
     }
   }
+  // fallback: si --list no dio puerto, buscar usbmodem en /dev
+  if (!port && version) port = findUsbmodem() ?? ''
   return { connected: version !== '', version, port }
 }
 
 let currentPort: string | null = null
 let lastAutoProbe = 0
+let autoProbeCooldown = 8000
 
 function broadcastDevice(state: DeviceState): void {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -199,15 +202,22 @@ function findUsbmodem(): string | null {
 setInterval(() => {
   if (currentPort && !existsSync(currentPort)) {
     currentPort = null
+    autoProbeCooldown = 8000
     broadcastDevice({ connected: false, version: '', port: '' })
     return
   }
-  if (!currentPort && Date.now() - lastAutoProbe > 8000) {
+  if (!currentPort && Date.now() - lastAutoProbe > autoProbeCooldown) {
     if (findUsbmodem()) {
       lastAutoProbe = Date.now()
       doProbe().then((state) => {
-        currentPort = state.connected ? state.port : null
-        broadcastDevice(state)
+        if (state.connected) {
+          currentPort = state.port || findUsbmodem()
+          autoProbeCooldown = 8000
+          broadcastDevice(state)
+        } else {
+          // reintenta cada vez menos seguido hasta un tope de 60 s
+          autoProbeCooldown = Math.min(autoProbeCooldown * 2, 60000)
+        }
       })
     }
   }
@@ -215,7 +225,8 @@ setInterval(() => {
 
 ipcMain.handle('pm3:probe', async () => {
   const state = await doProbe()
-  currentPort = state.connected ? state.port : null
+  currentPort = state.connected ? state.port || findUsbmodem() : null
+  autoProbeCooldown = 8000
   lastAutoProbe = Date.now()
   return state
 })
