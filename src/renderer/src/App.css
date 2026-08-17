@@ -46,18 +46,21 @@ button {
   cursor: pointer;
   border-radius: 8px;
   padding: 7px 11px;
-  background: var(--r);
-  border: 1px solid var(--ln);
+  background: rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--tx);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   transition: background 0.12s, border-color 0.12s;
 }
 
 button:hover:not(:disabled) {
-  background: var(--r2);
+  background: rgba(255, 255, 255, 0.09);
 }
 
 button:disabled {
@@ -95,14 +98,18 @@ button.small {
   padding: 4px 10px;
 }
 
-/* ============ ventana ============ */
+/* ============ ventana (liquid glass) ============ */
 .appwin {
   height: 100%;
-  background: var(--s);
   display: flex;
   flex-direction: column;
   position: relative;
   isolation: isolate;
+  background:
+    radial-gradient(900px 520px at 85% -12%, rgba(56, 209, 231, 0.16), transparent 60%),
+    radial-gradient(820px 500px at 6% -8%, rgba(147, 133, 247, 0.13), transparent 55%),
+    radial-gradient(700px 420px at 50% 115%, rgba(240, 176, 67, 0.07), transparent 60%),
+    #070a0f;
 }
 
 .titlebar {
@@ -111,8 +118,11 @@ button.small {
   align-items: center;
   gap: 12px;
   padding: 0 14px;
-  background: #0f141b;
-  border-bottom: 1px solid var(--ln);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.25);
   flex: none;
 }
 
@@ -197,8 +207,11 @@ button.small {
 .sidebar {
   width: 244px;
   min-width: 200px;
-  background: var(--s);
-  border-right: 1px solid var(--ln);
+  background: rgba(19, 25, 34, 0.55);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border-right: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -206,7 +219,7 @@ button.small {
 
 .sidebar-head {
   padding: 14px 14px 12px;
-  border-bottom: 1px solid var(--ln-soft);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   display: flex;
   flex-direction: column;
   gap: 11px;
@@ -312,7 +325,7 @@ button.small {
 
 .side-foot {
   padding: 10px;
-  border-top: 1px solid var(--ln-soft);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
   display: flex;
   gap: 8px;
 }
@@ -327,16 +340,19 @@ button.small {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--s);
+  background: rgba(19, 25, 34, 0.35);
 }
 
 .quick-bar {
   display: flex;
   gap: 7px;
   padding: 12px 14px;
-  border-bottom: 1px solid var(--ln-soft);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   flex-wrap: wrap;
   align-items: center;
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
 }
 
 .qa {
@@ -373,10 +389,13 @@ button.small {
 
 .cmd-bar {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--ln-soft);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   display: flex;
   flex-direction: column;
   gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
 }
 
 .cmd-info {
@@ -551,7 +570,10 @@ button.small {
   align-items: center;
   gap: 10px;
   padding: 8px 14px;
-  border-bottom: 1px solid var(--ln-soft);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   flex: none;
 }
 
@@ -662,8 +684,10 @@ button.small {
   align-items: center;
   gap: 14px;
   padding: 6px 14px;
-  border-top: 1px solid var(--ln);
-  background: #0f141b;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
   font-size: 11px;
   color: var(--tx-3);
   font-variant-numeric: tabular-nums;
@@ -697,8 +721,11 @@ button.small {
 .ai-panel {
   width: 328px;
   min-width: 280px;
-  background: var(--s);
-  border-left: 1px solid var(--ln);
+  background: rgba(19, 25, 34, 0.55);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -977,13 +1004,15 @@ button.small {
   width: 520px;
   max-width: 92vw;
   max-height: 88vh;
-  background: var(--s);
-  border: 1px solid var(--ln);
-  border-radius: 14px;
+  background: rgba(19, 25, 34, 0.72);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 30px 60px -20px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .modal-head {
@@ -1051,9 +1080,15 @@ button.small {
   display: grid;
   grid-template-columns: 28px 1fr;
   gap: 12px;
-  padding: 8px 0;
+  padding: 10px 12px;
   position: relative;
   z-index: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 
 .fstep .num {
