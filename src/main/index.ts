@@ -187,12 +187,12 @@ function broadcastDevice(state: DeviceState): void {
 function findUsbmodem(): string | null {
   try {
     const names = readdirSync('/dev')
-    return (
+    const found =
       names.find((n) => n.startsWith('tty.usbmodem')) ??
       names.find((n) => n.startsWith('cu.usbmodem')) ??
       names.find((n) => n.startsWith('ttyACM')) ??
       null
-    )
+    return found ? `/dev/${found}` : null
   } catch {
     return null
   }
