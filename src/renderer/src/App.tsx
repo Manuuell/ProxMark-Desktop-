@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { specFor, buildCommand, riskFor, type CommandSpec } from '../../shared/commands'
 import type { CatalogEntry } from '../../shared/catalog'
 import type { CommandProfile } from '../../shared/profiles'
 import AiPanel from './AiPanel'
 import FirmwareModal from './FirmwareModal'
+import ScriptsPanel from './ScriptsPanel'
+import DumpViewer from './DumpViewer'
+import { Logo } from './Logo'
 import { lineClass } from './highlight'
 import './types'
 
@@ -77,6 +80,17 @@ export default function App() {
   const [profiles, setProfiles] = useState<CommandProfile[]>([])
   const [profilesPath, setProfilesPath] = useState('')
   const [showFw, setShowFw] = useState(false)
+  const [showDump, setShowDump] = useState(false)
+  const [tab, setTab] = useState<'commands' | 'scripts'>('commands')
+  const [hist, setHist] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('pm3.cmdHistory') || '[]')
+    } catch {
+      return []
+    }
+  })
+  const [histIdx, setHistIdx] = useState(-1)
+  const [sugIdx, setSugIdx] = useState(-1)
   const [dev, setDev] = useState<{ connected: boolean | null; version: string; port: string }>({
     connected: null,
     version: '',
@@ -186,6 +200,19 @@ export default function App() {
     return `${selected} ${freeArgs}`.trim()
   }
 
+  function pushHistory(cmd: string) {
+    setHist((h) => {
+      const next = [cmd, ...h.filter((x) => x !== cmd)].slice(0, 100)
+      try {
+        localStorage.setItem('pm3.cmdHistory', JSON.stringify(next))
+      } catch {
+        /* best effort */
+      }
+      return next
+    })
+    setHistIdx(-1)
+  }
+
   async function execute(cmd: string, cwd?: string, clear = true) {
     if (clear) setOut([])
     await window.pm3.run(cmd, cwd)
@@ -194,12 +221,14 @@ export default function App() {
   async function runSelected() {
     const cmd = currentCmd()
     if (!cmd) return
+    pushHistory(cmd)
     await execute(cmd)
   }
 
   async function quickAction(profile: CommandProfile) {
     setOut([])
     for (const cmd of profile.commands) {
+      pushHistory(cmd)
       await execute(cmd, profile.cwd, false)
     }
   }
@@ -211,10 +240,85 @@ export default function App() {
   const visibleRoot = root.filter((c) => matches(c, search))
   const risk = selected ? riskFor(selected) : null
 
+  const knownPaths = useMemo(() => {
+    const set = new Set<string>()
+    for (const e of root) {
+      set.add(e.name)
+      if (e.isGroup) {
+        for (const c of tree[e.name] ?? []) {
+          const p = `${e.name} ${c.name}`
+          set.add(p)
+          if (c.isGroup) {
+            for (const g of tree[p] ?? []) set.add(`${p} ${g.name}`)
+          }
+        }
+      }
+    }
+    return [...set]
+  }, [root, tree])
+
+  const suggestions = useMemo(() => {
+    const q = freeArgs.trim().toLowerCase()
+    if (!q) return []
+    return knownPaths.filter((p) => p.toLowerCase().startsWith(q)).slice(0, 8)
+  }, [freeArgs, knownPaths])
+
+  function pickSuggestion(p: string) {
+    setSelected('')
+    setFreeArgs(p)
+    setSugIdx(-1)
+  }
+
+  function onArgsKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      if (suggestions.length > 0 && sugIdx >= 0) {
+        e.preventDefault()
+        pickSuggestion(suggestions[sugIdx])
+        return
+      }
+      runSelected()
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (suggestions.length > 0) {
+        setSugIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+        return
+      }
+      const next = histIdx === -1 ? hist.length - 1 : histIdx - 1
+      if (next >= 0) {
+        setHistIdx(next)
+        setSelected('')
+        setFreeArgs(hist[next])
+      }
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (suggestions.length > 0) {
+        setSugIdx((i) => (i >= suggestions.length - 1 ? 0 : i + 1))
+        return
+      }
+      const next = histIdx === -1 ? -1 : histIdx + 1
+      if (next === -1) {
+        setHistIdx(-1)
+        setFreeArgs('')
+      } else if (next < hist.length) {
+        setHistIdx(next)
+        setSelected('')
+        setFreeArgs(hist[next])
+      }
+      return
+    }
+    if (e.key === 'Escape') {
+      setSugIdx(-1)
+    }
+  }
+
   return (
     <div className="appwin">
       <div className="titlebar">
-        <span className="wtitle">Proxmark Desktop</span>
+        <span className="wtitle">ProxMark Desktop</span>
         <span className="grow" />
         <span className={`devpill ${dev.connected === false ? 'off' : ''}`}>
           <span className="pulse" />
@@ -222,9 +326,8 @@ export default function App() {
             <b>Detectando…</b>
           ) : dev.connected ? (
             <>
-              <b>Proxmark3</b>
+              <b>proxmark</b>
               <span>{dev.port}</span>
-              <span className="fw">{dev.version}</span>
             </>
           ) : (
             <b>Sin dispositivo</b>
@@ -236,37 +339,56 @@ export default function App() {
         <aside className="sidebar">
           <div className="sidebar-head">
             <div className="brand">
-              <div className="glyph">P</div>
+              <div className="glyph">
+                <Logo size={19} />
+              </div>
               <div className="bt">
-                Proxmark<small>Desktop</small>
+                ProxMark<small>Desktop</small>
               </div>
             </div>
-            <input
-              className="search"
-              placeholder="Buscar comando…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="tree">
-            {visibleRoot.map((c) => (
-              <TreeNode
-                key={c.name}
-                path={c.name}
-                entry={c}
-                depth={0}
-                open={open}
-                tree={tree}
-                selected={selected}
-                search={search}
-                onToggle={toggle}
-                onSelect={select}
+            <div className="tabs">
+              <button className={tab === 'commands' ? 'active' : ''} onClick={() => setTab('commands')}>
+                Comandos
+              </button>
+              <button className={tab === 'scripts' ? 'active' : ''} onClick={() => setTab('scripts')}>
+                Scripts
+              </button>
+            </div>
+            {tab === 'commands' && (
+              <input
+                className="search"
+                placeholder="Buscar comando…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
-            ))}
+            )}
           </div>
+          {tab === 'commands' ? (
+            <div className="tree">
+              {visibleRoot.map((c) => (
+                <TreeNode
+                  key={c.name}
+                  path={c.name}
+                  entry={c}
+                  depth={0}
+                  open={open}
+                  tree={tree}
+                  selected={selected}
+                  search={search}
+                  onToggle={toggle}
+                  onSelect={select}
+                />
+              ))}
+            </div>
+          ) : (
+            <ScriptsPanel run={execute} busy={busy} />
+          )}
           <div className="side-foot">
             <button className="ghost" title="Recargar catálogo de comandos" onClick={refreshCatalog}>
               ⟳ Catálogo
+            </button>
+            <button className="ghost" title="Abrir un dump MIFARE" onClick={() => setShowDump(true)}>
+              💾 Dump
             </button>
             <button className="sig" title="Actualizar firmware Iceman" onClick={() => setShowFw(true)}>
               ⚡ Firmware
@@ -353,20 +475,45 @@ export default function App() {
 
             <div className="run-box">
               {!spec && (
-                <input
-                  className="args"
-                  placeholder="argumentos (texto libre)"
-                  value={freeArgs}
-                  disabled={!selected || busy}
-                  onChange={(e) => setFreeArgs(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && runSelected()}
-                />
+                <div className="args-wrap">
+                  <input
+                    className="args"
+                    placeholder="comando o argumentos (texto libre)"
+                    value={freeArgs}
+                    disabled={busy}
+                    onChange={(e) => {
+                      setFreeArgs(e.target.value)
+                      setSugIdx(-1)
+                    }}
+                    onKeyDown={onArgsKey}
+                  />
+                  {suggestions.length > 0 && (
+                    <div className="suggest">
+                      {suggestions.map((s, i) => (
+                        <div
+                          key={s}
+                          className={`suggest-item ${i === sugIdx ? 'active' : ''}`}
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            pickSuggestion(s)
+                          }}
+                        >
+                          {s}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               {spec && <div className="preview">$ pm3 -c "<b>{currentCmd()}</b>"</div>}
               <button className="ghost" disabled={!selected || busy} onClick={() => execute(`${selected} -h`)}>
                 Ayuda
               </button>
-              <button className="primary" disabled={!selected || busy} onClick={runSelected}>
+              <button
+                className="primary"
+                disabled={busy || (!selected && !freeArgs.trim())}
+                onClick={runSelected}
+              >
                 {busy ? 'Ejecutando…' : '▶ Ejecutar'}
               </button>
             </div>
@@ -450,6 +597,8 @@ export default function App() {
       {showFw && (
         <FirmwareModal onClose={() => setShowFw(false)} run={(cmd) => execute(cmd, undefined, false)} />
       )}
+
+      {showDump && <DumpViewer onClose={() => setShowDump(false)} />}
     </div>
   )
 }

@@ -1,22 +1,41 @@
 import { app, BrowserWindow, ipcMain, safeStorage } from 'electron'
 import { join } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import {
   readFileSync,
   writeFileSync,
   existsSync,
   mkdirSync,
   statSync,
-  readdirSync
+  readdirSync,
+  unlinkSync
 } from 'node:fs'
 import { Pm3Runner, PM3_BIN } from './pm3'
 import { parseHelp, stripAnsi, type CatalogEntry } from '../shared/catalog'
 import { chat, type AiSettings } from './ai'
+import { AI_PROVIDERS, isAiProvider, type AiProvider } from '../shared/ai'
 import type { CommandProfile, ProfilesResult } from '../shared/profiles'
 import * as fw from './firmware'
+import * as dumps from './dumps'
+import * as scripts from './scripts'
+
+// Nombre de la app (menú de macOS, notificaciones, userData). Debe ir antes de
+// que la app esté lista.
+app.setName('ProxMark Desktop')
 
 const runner = new Pm3Runner()
 const catalogCache = new Map<string, CatalogEntry[]>()
+
+// Icono de la app. En desarrollo vive en build/ del repo; empaquetado, junto a
+// los recursos. Devuelve '' si no se encuentra (Electron usa el suyo).
+function iconPath(): string {
+  const candidates = [
+    join(app.getAppPath(), 'build', 'icons', '512x512.png'),
+    join(process.resourcesPath ?? '', 'icon.png'),
+    join(__dirname, '../../build/icons/512x512.png')
+  ]
+  return candidates.find((p) => p && existsSync(p)) ?? ''
+}
 
 // El estado busy del runner se transmite a TODAS las ventanas para que la UI
 // principal se bloquee también durante operaciones de firmware/IA.
@@ -27,11 +46,13 @@ runner.on('busy', (b: boolean) => {
 })
 
 function createWindow(): void {
+  const icon = iconPath()
   const win = new BrowserWindow({
     width: 1320,
     height: 860,
-    title: 'Proxmark Desktop',
+    title: 'ProxMark Desktop',
     backgroundColor: '#101418',
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -48,6 +69,12 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // En macOS sin empaquetar el Dock muestra el icono de Electron: lo sustituimos
+  // en caliente. Empaquetado manda el .icns del bundle.
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    const icon = iconPath()
+    if (icon) app.dock?.setIcon(icon)
+  }
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -120,12 +147,28 @@ ipcMain.handle('pm3:catalog', async (_event, path: string) => {
   await runner.run(cmd, (l) => lines.push(l))
   const entries = parseHelp(lines.join('\n'))
   catalogCache.set(key, entries)
-  writeCatalogDisk(key, entries)
+  // No cacheamos un catálogo vacío: suele significar un fallo transitorio
+  // (puerto ocupado por otra instancia, dispositivo desconectado, etc.). Así el
+  // siguiente arranque reintenta en vez de quedarse con una lista vacía.
+  if (entries.length > 0) writeCatalogDisk(key, entries)
   return entries
 })
 
 ipcMain.handle('pm3:catalog-clear', () => {
   catalogCache.clear()
+  try {
+    if (existsSync(catalogDiskDir)) {
+      for (const f of readdirSync(catalogDiskDir)) {
+        try {
+          unlinkSync(join(catalogDiskDir, f))
+        } catch {
+          /* best effort */
+        }
+      }
+    }
+  } catch {
+    /* best effort */
+  }
   return true
 })
 
@@ -238,20 +281,38 @@ const settingsPath = join(app.getPath('userData'), 'settings.json')
 function loadAiSettings(): AiSettings {
   try {
     const raw = JSON.parse(readFileSync(settingsPath, 'utf8'))
+    const provider: AiProvider = isAiProvider(raw.provider) ? raw.provider : 'deepseek'
+    const info = AI_PROVIDERS[provider]
     let apiKey = ''
     if (raw.apiKeyEnc && safeStorage.isEncryptionAvailable()) {
       apiKey = safeStorage.decryptString(Buffer.from(raw.apiKeyEnc, 'base64'))
     } else if (typeof raw.apiKey === 'string') {
       apiKey = raw.apiKey
     }
-    return { apiKey, model: raw.model ?? 'deepseek-chat' }
+    return {
+      apiKey,
+      model: typeof raw.model === 'string' && raw.model ? raw.model : info.defaultModel,
+      provider,
+      baseUrl: typeof raw.baseUrl === 'string' && raw.baseUrl ? raw.baseUrl : info.baseUrl
+    }
   } catch {
-    return { apiKey: '', model: 'deepseek-chat' }
+    return {
+      apiKey: '',
+      model: AI_PROVIDERS.deepseek.defaultModel,
+      provider: 'deepseek',
+      baseUrl: AI_PROVIDERS.deepseek.baseUrl
+    }
   }
 }
 
 function saveAiSettings(s: AiSettings): void {
-  const out: Record<string, unknown> = { model: s.model || 'deepseek-chat' }
+  const provider = isAiProvider(s.provider) ? s.provider : 'deepseek'
+  const info = AI_PROVIDERS[provider]
+  const out: Record<string, unknown> = {
+    provider,
+    model: s.model || info.defaultModel,
+    baseUrl: s.baseUrl || info.baseUrl
+  }
   if (safeStorage.isEncryptionAvailable() && s.apiKey) {
     out.apiKeyEnc = safeStorage.encryptString(s.apiKey).toString('base64')
   } else {
@@ -262,12 +323,19 @@ function saveAiSettings(s: AiSettings): void {
 
 ipcMain.handle('ai:getSettings', () => loadAiSettings())
 ipcMain.handle('ai:setSettings', (_e, s: AiSettings) => {
-  saveAiSettings({ apiKey: String(s.apiKey ?? ''), model: String(s.model ?? 'deepseek-chat') })
+  saveAiSettings({
+    apiKey: String(s.apiKey ?? ''),
+    model: String(s.model ?? ''),
+    provider: isAiProvider(s.provider) ? s.provider : 'deepseek',
+    baseUrl: String(s.baseUrl ?? '')
+  })
   return true
 })
 ipcMain.handle('ai:chat', async (event, messages) => {
   const settings = loadAiSettings()
-  if (!settings.apiKey) throw new Error('Configura tu API key de DeepSeek primero (botón ⚙ en el panel IA).')
+  if (!settings.apiKey && AI_PROVIDERS[settings.provider]?.needsKey) {
+    throw new Error('Configura tu API key primero (botón ⚙ en el panel IA).')
+  }
   const win = BrowserWindow.fromWebContents(event.sender)
   const send = (line: string): void => {
     if (win && !win.isDestroyed()) {
@@ -338,4 +406,42 @@ ipcMain.handle(
   'fw:flash-image',
   (event, opts: { port: string; image: 'bootrom' | 'fullimage'; unlock: boolean }) =>
     fw.flashImage(runner, opts.port, opts.image, opts.unlock, senderFor(event))
+)
+
+// ---------- Visor de dumps ----------
+
+ipcMain.handle('dumps:open', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  return win ? dumps.openDump(win) : null
+})
+ipcMain.handle('dumps:parse', (_event, path: string) => dumps.parseDumpPath(String(path)))
+
+// Copia un dump a la tarjeta que está en el lector (hf mf restore).
+ipcMain.handle(
+  'dumps:clone',
+  async (event, opts: { dump: dumps.DumpData; useKeys: boolean; force: boolean }) => {
+    const send = senderFor(event)
+    const dump = opts.dump
+    if (!dump?.path) throw new Error('No hay dump cargado.')
+    const keyBuf = dumps.buildKeyFile(dump.sectors)
+    const keyPath = join(tmpdir(), `pm3-restore-${Date.now()}.key.bin`)
+    writeFileSync(keyPath, keyBuf)
+    send(`── [Clonado] archivo de claves temporal: ${keyPath} ──`)
+    const flags = [dumps.sizeFlag(dump), '-f', dump.path, '-k', keyPath]
+    if (opts.useKeys) flags.push('--ka')
+    if (opts.force) flags.push('--force')
+    send(`── [Clonado] hf mf restore ${flags.join(' ')} ──`)
+    return runner.run(`hf mf restore ${flags.join(' ')}`, send)
+  }
+)
+
+// ---------- Scripts Lua ----------
+
+ipcMain.handle('scripts:list', () => scripts.listScripts())
+ipcMain.handle('scripts:read', (_event, path: string) => scripts.readScript(String(path)))
+ipcMain.handle('scripts:save', (_event, name: string, content: string) =>
+  scripts.saveScript(String(name), String(content))
+)
+ipcMain.handle('scripts:run', (event, name: string) =>
+  scripts.runScript(runner, String(name), senderFor(event))
 )

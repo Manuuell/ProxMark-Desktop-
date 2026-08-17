@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { UiMsg } from './types'
+import { AI_PROVIDERS, AI_PROVIDER_IDS, type AiProvider } from '../../shared/ai'
 import ColoredLines from './ColoredLines'
 import './types'
-
-const MODELS = ['deepseek-chat', 'deepseek-reasoner']
 
 export default function AiPanel() {
   const [msgs, setMsgs] = useState<UiMsg[]>([])
@@ -11,17 +10,23 @@ export default function AiPanel() {
   const [thinking, setThinking] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('deepseek-chat')
+  const [model, setModel] = useState(AI_PROVIDERS.deepseek.defaultModel)
+  const [provider, setProvider] = useState<AiProvider>('deepseek')
+  const [baseUrl, setBaseUrl] = useState(AI_PROVIDERS.deepseek.baseUrl)
   const [hasKey, setHasKey] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  const info = AI_PROVIDERS[provider]
 
   useEffect(() => {
     window.pm3.ai
       .getSettings()
       .then((s) => {
         setApiKey(s.apiKey)
-        setModel(s.model || 'deepseek-chat')
-        setHasKey(Boolean(s.apiKey))
+        setProvider(s.provider ?? 'deepseek')
+        setBaseUrl(s.baseUrl ?? AI_PROVIDERS[s.provider ?? 'deepseek'].baseUrl)
+        setModel(s.model || AI_PROVIDERS[s.provider ?? 'deepseek'].defaultModel)
+        setHasKey(!AI_PROVIDERS[s.provider ?? 'deepseek'].needsKey || Boolean(s.apiKey))
       })
       .catch(() => {})
   }, [])
@@ -29,6 +34,14 @@ export default function AiPanel() {
   useEffect(() => {
     scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight)
   }, [msgs, thinking])
+
+  function applyProvider(p: AiProvider): void {
+    const inf = AI_PROVIDERS[p]
+    setProvider(p)
+    setBaseUrl(inf.baseUrl)
+    setModel(inf.defaultModel)
+    setHasKey(!inf.needsKey || Boolean(apiKey))
+  }
 
   async function send() {
     const text = input.trim()
@@ -52,8 +65,13 @@ export default function AiPanel() {
   }
 
   async function saveSettings() {
-    await window.pm3.ai.setSettings({ apiKey: apiKey.trim(), model })
-    setHasKey(Boolean(apiKey.trim()))
+    await window.pm3.ai.setSettings({
+      apiKey: apiKey.trim(),
+      model: model.trim() || info.defaultModel,
+      provider,
+      baseUrl: baseUrl.trim() || info.baseUrl
+    })
+    setHasKey(!info.needsKey || Boolean(apiKey.trim()))
     setShowSettings(false)
   }
 
@@ -62,7 +80,7 @@ export default function AiPanel() {
       <div className="ai-head">
         <div className="glyph">✦</div>
         <div className="att">
-          Proxmark Assistant<small>DeepSeek · {model}</small>
+          Proxmark Assistant<small>{info.label} · {model}</small>
         </div>
         <div className="hbtn">
           <button title="Configuración" onClick={() => setShowSettings((s) => !s)}>
@@ -77,26 +95,51 @@ export default function AiPanel() {
       {showSettings && (
         <div className="ai-settings">
           <label>
-            API key de DeepSeek
-            <input
-              type="password"
-              value={apiKey}
-              placeholder="sk-…"
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-          </label>
-          <label>
-            Modelo
-            <select value={model} onChange={(e) => setModel(e.target.value)}>
-              {MODELS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
+            Proveedor
+            <select
+              value={provider}
+              onChange={(e) => applyProvider(e.target.value as AiProvider)}
+            >
+              {AI_PROVIDER_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {AI_PROVIDERS[id].label}
                 </option>
               ))}
             </select>
           </label>
+          {info.needsKey && (
+            <label>
+              API key
+              <input
+                type="password"
+                value={apiKey}
+                placeholder={provider === 'openai' ? 'sk-…' : 'sk-…'}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+            </label>
+          )}
+          <label>
+            URL del endpoint
+            <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+          </label>
+          <label>
+            Modelo
+            {info.models.length > 0 ? (
+              <select value={model} onChange={(e) => setModel(e.target.value)}>
+                {info.models.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input value={model} onChange={(e) => setModel(e.target.value)} />
+            )}
+          </label>
           <div className="ai-settings-note">
-            La key se guarda cifrada en este equipo (nunca sale de la app salvo para llamar a DeepSeek).
+            {info.needsKey
+              ? 'La key se guarda cifrada en este equipo (nunca sale de la app salvo para llamar al proveedor).'
+              : 'Ollama es local: no requiere API key y tus datos no salen de tu máquina.'}
           </div>
           <button className="primary" onClick={saveSettings}>
             Guardar
@@ -109,7 +152,7 @@ export default function AiPanel() {
           <div className="ai-empty">
             {hasKey
               ? 'Pregúntame, por ejemplo: "detecta la tarjeta que está en el lector" o "prueba las claves por defecto".'
-              : 'Configura tu API key de DeepSeek con el botón ⚙ para empezar.'}
+              : 'Configura tu proveedor y API key con el botón ⚙ para empezar.'}
           </div>
         )}
         {msgs.map((m, i) =>

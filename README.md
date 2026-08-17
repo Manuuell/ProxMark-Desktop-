@@ -1,8 +1,8 @@
-# Proxmark Desktop
+# ProxMark Desktop
 
 > Interfaz de escritorio para **Proxmark3** sin terminal, con **asistente IA integrado**.
 
-**Proxmark Desktop** envuelve el client `pm3` (firmware Iceman) en una app de
+**ProxMark Desktop** envuelve el client `pm3` (firmware Iceman) en una app de
 escritorio moderna (Electron + React): navegas el árbol de comandos con clics,
 ejecutas acciones rápidas con un botón, ves la salida en vivo y puedes pedirle
 al **Proxmark Assistant** (DeepSeek) que opere el dispositivo por ti con

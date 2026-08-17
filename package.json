@@ -1,13 +1,18 @@
 {
   "name": "proxmark-desktop",
+  "productName": "ProxMark Desktop",
   "version": "0.1.0",
-  "description": "Proxmark Desktop: interfaz de escritorio para Proxmark3 sin terminal, con asistente IA",
+  "description": "ProxMark Desktop: interfaz de escritorio para Proxmark3 sin terminal, con asistente IA",
   "main": "out/main/index.js",
   "private": true,
   "license": "MIT",
   "scripts": {
+    "icons": "./scripts/make-icons.sh",
+    "brand:dev": "./scripts/dev-brand.sh",
+    "predev": "./scripts/dev-brand.sh",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "prestart": "./scripts/dev-brand.sh",
     "typecheck": "tsc --noEmit",
     "start": "electron-vite preview"
   },

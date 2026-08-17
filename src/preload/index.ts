@@ -1,7 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { CatalogEntry } from '../shared/catalog'
-import type { AiSettings, ChatInputMsg, ChatOutputMsg } from '../main/ai'
+import type { AiSettings, ChatInputMsg, ChatOutputMsg } from '../shared/ai'
 import type { ProfilesResult } from '../shared/profiles'
+import type { DumpData } from '../main/dumps'
+import type { ScriptInfo } from '../main/scripts'
 
 const api = {
   run: (cmd: string, cwd?: string): Promise<number | null> =>
@@ -68,6 +70,19 @@ const api = {
     setSettings: (s: AiSettings): Promise<boolean> => ipcRenderer.invoke('ai:setSettings', s),
     chat: (messages: ChatInputMsg[]): Promise<ChatOutputMsg[]> =>
       ipcRenderer.invoke('ai:chat', messages)
+  },
+  dumps: {
+    open: (): Promise<DumpData | null> => ipcRenderer.invoke('dumps:open'),
+    parse: (path: string): Promise<DumpData> => ipcRenderer.invoke('dumps:parse', path),
+    clone: (opts: { dump: DumpData; useKeys: boolean; force: boolean }): Promise<number | null> =>
+      ipcRenderer.invoke('dumps:clone', opts)
+  },
+  scripts: {
+    list: (): Promise<ScriptInfo[]> => ipcRenderer.invoke('scripts:list'),
+    read: (path: string): Promise<string> => ipcRenderer.invoke('scripts:read', path),
+    save: (name: string, content: string): Promise<string> =>
+      ipcRenderer.invoke('scripts:save', name, content),
+    run: (name: string): Promise<number | null> => ipcRenderer.invoke('scripts:run', name)
   }
 }
 

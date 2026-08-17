@@ -1,30 +1,19 @@
 import { Pm3Runner } from './pm3'
 import { parseHelp } from '../shared/catalog'
+import { AI_PROVIDERS, type AiSettings, type ChatInputMsg, type ChatOutputMsg } from '../shared/ai'
 
-// Cliente DeepSeek (API compatible con OpenAI) + agente con herramientas pm3.
+export type { AiSettings, ChatInputMsg, ChatOutputMsg } from '../shared/ai'
 
-const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions'
+// Cliente multi-proveedor (DeepSeek/OpenAI/Ollama, todos con API compatible con OpenAI)
+// + agente con herramientas pm3.
+
 const DEFAULT_MODEL = 'deepseek-chat'
 const MAX_ITERATIONS = 12
 const MAX_TOOL_OUTPUT = 6000
 
-export interface AiSettings {
-  apiKey: string
-  model: string
-}
-
-export interface ChatInputMsg {
-  role: 'user' | 'assistant'
-  content: string
-}
-
-export type ChatOutputMsg =
-  | { kind: 'assistant'; content: string }
-  | { kind: 'tool'; tool: string; label: string; output: string }
-
 export type ToolMsg = Extract<ChatOutputMsg, { kind: 'tool' }>
 
-const SYSTEM_PROMPT = `Eres "Proxmark Assistant", el asistente IA de Proxmark Desktop, una app de
+const SYSTEM_PROMPT = `Eres "Proxmark Assistant", el asistente IA de ProxMark Desktop, una app de
 escritorio que controla un Proxmark3 (client Iceman) ya conectado por USB.
 Ayudas al usuario a operar el dispositivo con lenguaje natural.
 
@@ -107,13 +96,17 @@ const TOOLS = [
   }
 ]
 
-async function deepseek(messages: unknown[], settings: AiSettings, withTools = true): Promise<unknown> {
-  const res = await fetch(DEEPSEEK_URL, {
+function endpoint(settings: AiSettings): string {
+  return settings.baseUrl || AI_PROVIDERS[settings.provider]?.baseUrl || AI_PROVIDERS.deepseek.baseUrl
+}
+
+async function chatCompletion(messages: unknown[], settings: AiSettings, withTools = true): Promise<unknown> {
+  const url = endpoint(settings)
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (settings.apiKey) headers.Authorization = `Bearer ${settings.apiKey}`
+  const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.apiKey}`
-    },
+    headers,
     body: JSON.stringify({
       model: settings.model || DEFAULT_MODEL,
       messages,
@@ -124,7 +117,7 @@ async function deepseek(messages: unknown[], settings: AiSettings, withTools = t
   })
   if (!res.ok) {
     const err = (await res.text()).slice(0, 300)
-    throw new Error(`DeepSeek respondió ${res.status}: ${err}`)
+    throw new Error(`La API respondió ${res.status}: ${err}`)
   }
   return res.json()
 }
@@ -183,7 +176,7 @@ export async function chat(
   const out: ChatOutputMsg[] = []
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const data = (await deepseek(ctx, settings)) as {
+    const data = (await chatCompletion(ctx, settings)) as {
       error?: { message?: string }
       choices?: { message: { content?: string; tool_calls?: { id: string; function: { name: string; arguments?: string } }[] } }[]
     }
@@ -230,7 +223,7 @@ export async function chat(
 
   // Se agotaron las iteraciones: pedimos el resumen final sin más herramientas.
   try {
-    const finalData = (await deepseek(ctx, settings, false)) as {
+    const finalData = (await chatCompletion(ctx, settings, false)) as {
       choices?: { message: { content?: string } }[]
     }
     const content = finalData.choices?.[0]?.message?.content

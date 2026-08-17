@@ -1,4 +1,4 @@
-# Proxmark Desktop — Handoff
+# ProxMark Desktop — Handoff
 
 Estado del proyecto al 16/08/2026 para retomar en otro chat.
 

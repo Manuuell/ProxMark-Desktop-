@@ -1,15 +1,13 @@
 import type { CatalogEntry } from '../../shared/catalog'
 import type { CommandProfile, ProfilesResult } from '../../shared/profiles'
+import type { AiSettings, ChatOutputMsg } from '../../shared/ai'
+import type { DumpData } from '../../main/dumps'
+import type { ScriptInfo } from '../../main/scripts'
 
 export interface AiApi {
-  getSettings(): Promise<{ apiKey: string; model: string }>
-  setSettings(s: { apiKey: string; model: string }): Promise<boolean>
-  chat(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<
-    (
-      | { kind: 'assistant'; content: string }
-      | { kind: 'tool'; tool: string; label: string; output: string }
-    )[]
-  >
+  getSettings(): Promise<AiSettings>
+  setSettings(s: AiSettings): Promise<boolean>
+  chat(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<ChatOutputMsg[]>
 }
 
 export interface Pm3Api {
@@ -48,6 +46,17 @@ export interface Pm3Api {
   onBusy(cb: (busy: boolean) => void): () => void
   onDevice(cb: (state: { connected: boolean; version: string; port: string }) => void): () => void
   ai: AiApi
+  dumps: {
+    open(): Promise<DumpData | null>
+    parse(path: string): Promise<DumpData>
+    clone(opts: { dump: DumpData; useKeys: boolean; force: boolean }): Promise<number | null>
+  }
+  scripts: {
+    list(): Promise<ScriptInfo[]>
+    read(path: string): Promise<string>
+    save(name: string, content: string): Promise<string>
+    run(name: string): Promise<number | null>
+  }
 }
 
 export type UiMsg =
